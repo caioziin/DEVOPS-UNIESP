@@ -32,7 +32,7 @@ O pipeline deve ser dividido em **três etapas visíveis e sequenciais**:
 ---
 
 ## ⚠️ O Fator Caos (Commit do Professor)
-Durante o período da atividade, o professor André fará um **commit surpresa** propositalmente quebrado no repositório. 
+Durante o período da atividade, farei um **commit surpresa** propositalmente quebrado no repositório. 
 * **Sua missão:** Monitorar as Actions, identificar por que o pipeline travou e realizar o "Hotfix" (correção) para restaurar o fluxo de entrega.
 
 ---
