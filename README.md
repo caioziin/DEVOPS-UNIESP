@@ -48,6 +48,8 @@ Baseado no README original, seu pipeline deve ter:
 
 ---
 ## 👥 Integrantes
-- Nome 1
-- Nome 2
+- Caio Sousa
+- Pedro Davi
+- Pedro Henrique
+- Chrystian Soares
 ...
