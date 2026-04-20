@@ -2,7 +2,7 @@ package com.uniesp.infrastructure.adapter.out;
 
 import com.uniesp.application.port.out.ProductOutputPort;
 import com.uniesp.domain.model.Product;
-import com.uniesp.infrastructure.adapter.out.entity.ProductEntity;
+import com.uniesp.infrastructure.adapter.out.mapper.ProductMapper;
 import com.uniesp.infrastructure.adapter.out.repository.ProductJpaRepository;
 import org.springframework.stereotype.Component;
 
@@ -20,14 +20,12 @@ public class ProductRepositoryAdapter implements ProductOutputPort {
 
     @Override
     public List<Product> findAll() {
-        return jpa.findAllByOrderByNameAsc().stream()
-                .map(ProductEntity::toDomain)
-                .toList();
+        return jpa.findAllByOrderByNameAsc().stream().map(ProductMapper::toDomain).toList();
     }
 
     @Override
     public Optional<Product> findById(Long id) {
-        return jpa.findById(id).map(ProductEntity::toDomain);
+        return jpa.findById(id).map(ProductMapper::toDomain);
     }
 
     @Override
@@ -37,7 +35,7 @@ public class ProductRepositoryAdapter implements ProductOutputPort {
 
     @Override
     public Product save(Product product) {
-        return jpa.save(ProductEntity.fromDomain(product)).toDomain();
+        return ProductMapper.toDomain(jpa.save(ProductMapper.toEntity(product)));
     }
 
     @Override
