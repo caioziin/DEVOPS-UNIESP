@@ -8,11 +8,10 @@ import com.uniesp.domain.model.User;
 
 import java.util.List;
 
-// SRP: responsável apenas pela orquestração das regras de negócio de User
-// DIP: depende da abstração UserOutputPort, não de JPA/banco
+// SRP: apenas orquestra — regras de negócio vivem no domínio
+// DIP: depende de UserOutputPort (abstração), nunca de JPA
 public class UserUseCase implements UserInputPort {
 
-    // Injeção via construtor (facilita testes com mock)
     private final UserOutputPort userOutputPort;
 
     public UserUseCase(UserOutputPort userOutputPort) {
@@ -32,31 +31,29 @@ public class UserUseCase implements UserInputPort {
 
     @Override
     public User create(String name, String email) {
-        // Regra de negócio: e-mail único
         if (userOutputPort.existsByEmail(email)) {
             throw new BusinessException("Já existe um usuário com o e-mail: " + email);
         }
+        // Domínio constrói a si mesmo — UseCase apenas coordena
         return userOutputPort.save(new User(name, email));
     }
 
     @Override
     public User update(Long id, String name, String email) {
-        User user = findById(id); // lança 404 se não existir
+        User user = findById(id);
 
-        boolean emailEmUso = userOutputPort.existsByEmail(email)
-                && !user.getEmail().equals(email);
-        if (emailEmUso) {
+        if (userOutputPort.existsByEmail(email) && !user.getEmail().equals(email)) {
             throw new BusinessException("E-mail já em uso: " + email);
         }
 
-        user.setName(name);
-        user.setEmail(email);
+        // SRP: regra de mutação delegada ao domínio
+        user.updateProfile(name, email);
         return userOutputPort.save(user);
     }
 
     @Override
     public void delete(Long id) {
-        findById(id); // garante que existe antes de deletar
+        findById(id);
         userOutputPort.deleteById(id);
     }
 }

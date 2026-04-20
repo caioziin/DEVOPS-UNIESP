@@ -39,8 +39,8 @@ public class ProductUseCase implements ProductInputPort {
     @Override
     public Product update(Long id, String name, BigDecimal price) {
         Product product = findById(id);
-        product.setName(name);
-        product.setPrice(price);
+        // SRP: regra de mutação delegada ao domínio
+        product.updateDetails(name, price);
         return productOutputPort.save(product);
     }
 
