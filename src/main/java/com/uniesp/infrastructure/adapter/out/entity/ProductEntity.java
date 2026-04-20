@@ -1,6 +1,5 @@
 package com.uniesp.infrastructure.adapter.out.entity;
 
-import com.uniesp.domain.model.Product;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -24,24 +23,16 @@ public class ProductEntity {
 
     @PrePersist
     public void prePersist() {
-        this.createdAt = LocalDateTime.now();
-    }
-
-    public static ProductEntity fromDomain(Product p) {
-        ProductEntity e = new ProductEntity();
-        e.id        = p.getId();
-        e.name      = p.getName();
-        e.price     = p.getPrice();
-        e.createdAt = p.getCreatedAt();
-        return e;
-    }
-
-    public Product toDomain() {
-        return new Product(id, name, price, createdAt);
+        if (this.createdAt == null) this.createdAt = LocalDateTime.now();
     }
 
     public Long getId()                 { return id; }
     public String getName()             { return name; }
     public BigDecimal getPrice()        { return price; }
     public LocalDateTime getCreatedAt() { return createdAt; }
+
+    public void setId(Long id)                       { this.id = id; }
+    public void setName(String name)                 { this.name = name; }
+    public void setPrice(BigDecimal price)            { this.price = price; }
+    public void setCreatedAt(LocalDateTime createdAt){ this.createdAt = createdAt; }
 }

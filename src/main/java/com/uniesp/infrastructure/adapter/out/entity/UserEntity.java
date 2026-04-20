@@ -1,9 +1,9 @@
 package com.uniesp.infrastructure.adapter.out.entity;
 
-import com.uniesp.domain.model.User;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
+// SRP: entity só conhece JPA — conversão saiu daqui para o UserMapper
 @Entity
 @Table(name = "users")
 public class UserEntity {
@@ -23,27 +23,16 @@ public class UserEntity {
 
     @PrePersist
     public void prePersist() {
-        this.createdAt = LocalDateTime.now();
+        if (this.createdAt == null) this.createdAt = LocalDateTime.now();
     }
 
-    // ── Conversão domínio → entity ──────────────────────────────────────
-    public static UserEntity fromDomain(User user) {
-        UserEntity e = new UserEntity();
-        e.id        = user.getId();
-        e.name      = user.getName();
-        e.email     = user.getEmail();
-        e.createdAt = user.getCreatedAt();
-        return e;
-    }
-
-    // ── Conversão entity → domínio ──────────────────────────────────────
-    public User toDomain() {
-        return new User(id, name, email, createdAt);
-    }
-
-    // Getters
     public Long getId()                 { return id; }
     public String getName()             { return name; }
     public String getEmail()            { return email; }
     public LocalDateTime getCreatedAt() { return createdAt; }
+
+    public void setId(Long id)                       { this.id = id; }
+    public void setName(String name)                 { this.name = name; }
+    public void setEmail(String email)               { this.email = email; }
+    public void setCreatedAt(LocalDateTime createdAt){ this.createdAt = createdAt; }
 }
