@@ -1,4 +1,4 @@
-package com.uniesp.devops.domain.model;
+package com.uniesp.domain.model;
 
 import java.time.LocalDateTime;
 
