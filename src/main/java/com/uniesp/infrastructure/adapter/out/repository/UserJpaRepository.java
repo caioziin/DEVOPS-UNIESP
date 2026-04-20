@@ -1,4 +1,4 @@
-package com.uniesp.infrastructure.adapter.out.entity;
+package com.uniesp.infrastructure.adapter.out.repository;
 
 import com.uniesp.infrastructure.adapter.out.entity.UserEntity;
 import org.springframework.data.jpa.repository.JpaRepository;

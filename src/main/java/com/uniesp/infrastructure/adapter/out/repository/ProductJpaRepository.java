@@ -1,4 +1,11 @@
 package com.uniesp.infrastructure.adapter.out.repository;
 
-public class ProductJpaRepository {
+import com.uniesp.infrastructure.adapter.out.entity.ProductEntity;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.util.List;
+
+public interface ProductJpaRepository extends JpaRepository<ProductEntity, Long> {
+    List<ProductEntity> findAllByOrderByNameAsc();
+    boolean existsByName(String name);
 }
