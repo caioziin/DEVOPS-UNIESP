@@ -5,11 +5,10 @@ import com.uniesp.application.port.out.UserOutputPort;
 import com.uniesp.domain.exception.BusinessException;
 import com.uniesp.domain.exception.ResourceNotFoundException;
 import com.uniesp.domain.model.User;
+import com.uniesp.domain.service.UserValidationService;
 
 import java.util.List;
 
-// SRP: apenas orquestra — regras de negócio vivem no domínio
-// DIP: depende de UserOutputPort (abstração), nunca de JPA
 public class UserUseCase implements UserInputPort {
 
     private final UserOutputPort userOutputPort;
@@ -31,10 +30,13 @@ public class UserUseCase implements UserInputPort {
 
     @Override
     public User create(String name, String email) {
+        // Validação de domínio — corrige o bug Go que só checava name != ""
+        UserValidationService.validarNome(name);
+        UserValidationService.validarEmail(email);
+
         if (userOutputPort.existsByEmail(email)) {
             throw new BusinessException("Já existe um usuário com o e-mail: " + email);
         }
-        // Domínio constrói a si mesmo — UseCase apenas coordena
         return userOutputPort.save(new User(name, email));
     }
 
@@ -42,11 +44,13 @@ public class UserUseCase implements UserInputPort {
     public User update(Long id, String name, String email) {
         User user = findById(id);
 
+        UserValidationService.validarNome(name);
+        UserValidationService.validarEmail(email);
+
         if (userOutputPort.existsByEmail(email) && !user.getEmail().equals(email)) {
             throw new BusinessException("E-mail já em uso: " + email);
         }
 
-        // SRP: regra de mutação delegada ao domínio
         user.updateProfile(name, email);
         return userOutputPort.save(user);
     }

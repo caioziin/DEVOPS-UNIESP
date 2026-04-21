@@ -5,6 +5,7 @@ import com.uniesp.application.port.out.ProductOutputPort;
 import com.uniesp.domain.exception.BusinessException;
 import com.uniesp.domain.exception.ResourceNotFoundException;
 import com.uniesp.domain.model.Product;
+import com.uniesp.domain.service.PrecoProdutoService;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -39,7 +40,6 @@ public class ProductUseCase implements ProductInputPort {
     @Override
     public Product update(Long id, String name, BigDecimal price) {
         Product product = findById(id);
-        // SRP: regra de mutação delegada ao domínio
         product.updateDetails(name, price);
         return productOutputPort.save(product);
     }
@@ -48,5 +48,14 @@ public class ProductUseCase implements ProductInputPort {
     public void delete(Long id) {
         findById(id);
         productOutputPort.deleteById(id);
+    }
+
+    /**
+     * Corrige o bug Go: preço era hardcoded (100.0 * fator)
+     * Agora usa o preço real do banco + desconto por categoria
+     */
+    public BigDecimal calcularPrecoFinal(Long id) {
+        Product product = findById(id);
+        return PrecoProdutoService.calcularPrecoFinal(product);
     }
 }
