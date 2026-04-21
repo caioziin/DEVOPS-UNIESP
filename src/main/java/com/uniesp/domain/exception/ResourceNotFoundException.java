@@ -1,6 +1,9 @@
 package com.uniesp.domain.exception;
 
+import lombok.Getter;
+
 // Exceção de domínio — não depende de Spring
+@Getter
 public class ResourceNotFoundException extends RuntimeException {
 
     private final String resource;
@@ -12,6 +15,4 @@ public class ResourceNotFoundException extends RuntimeException {
         this.id       = id;
     }
 
-    public String getResource() { return resource; }
-    public Long   getId()       { return id; }
 }
