@@ -6,9 +6,6 @@ on:
   pull_request:
     branches: ["main"]
 
-env:
-  REGISTRY: docker.io
-
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -33,11 +30,13 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Gerar tag imutavel com sha do commit
+      - name: Gerar tag e salvar output
         id: image_output
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
         run: |
           SHA=$(echo $GITHUB_SHA | cut -c1-7)
-          IMAGE="docker.io/${{ secrets.DOCKERHUB_USERNAME }}/devops-app:sha-${SHA}"
+          IMAGE="docker.io/${DOCKERHUB_USERNAME}/devops-app:sha-${SHA}"
           echo "image_full=${IMAGE}" >> $GITHUB_OUTPUT
           echo "Tag gerada: ${IMAGE}"
 
