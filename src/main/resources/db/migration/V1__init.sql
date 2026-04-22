@@ -1,6 +1,7 @@
 CREATE TABLE IF NOT EXISTS users (
-    id   BIGSERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL
+    id         BIGSERIAL PRIMARY KEY,
+    name       VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS products (
