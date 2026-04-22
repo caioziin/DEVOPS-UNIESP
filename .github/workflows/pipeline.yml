@@ -120,6 +120,21 @@ jobs:
     needs: [commit, staging]
     if: github.event_name != 'pull_request'
 
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: devops_prod
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Login no Docker Hub
         uses: docker/login-action@v3
@@ -139,18 +154,12 @@ jobs:
 
       - name: Deploy em Production
         run: |
-          echo "================================================"
-          echo "  DEPLOY EM PRODUCAO"
-          echo "  Imagem: ${{ env.FULL_IMAGE }}"
-          echo "  Tag:    ${{ needs.commit.outputs.image_tag }}"
-          echo "================================================"
           docker run -d \
             --name app-prod \
-            -p 8080:8080 \
+            --network host \
+            -e DATABASE_URL="jdbc:postgresql://localhost:5432/devops_prod?user=postgres&password=${{ secrets.DB_PASSWORD }}" \
             -e SPRING_PROFILES_ACTIVE=production \
-            -e DATABASE_URL="jdbc:postgresql://localhost:5432/devops_staging" \
             ${{ env.FULL_IMAGE }}
-          echo "Container de producao iniciado com sucesso!"
 
       - name: Smoke Test no endpoint /health
         run: |
