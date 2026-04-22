@@ -15,7 +15,7 @@ jobs:
     name: Build, Test e Push
     runs-on: ubuntu-latest
     outputs:
-      image_full: ${{ steps.image_output.outputs.image_full }}
+      image_tag: ${{ steps.image_output.outputs.image_tag }}
 
     steps:
       - name: Checkout
@@ -30,15 +30,16 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Gerar tag e salvar output
+      - name: Gerar tag imutavel
         id: image_output
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
         run: |
           SHA=$(echo $GITHUB_SHA | cut -c1-7)
-          IMAGE="docker.io/${DOCKERHUB_USERNAME}/devops-app:sha-${SHA}"
-          echo "image_full=${IMAGE}" >> $GITHUB_OUTPUT
-          echo "Tag gerada: ${IMAGE}"
+          TAG="sha-${SHA}"
+          echo "image_tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "Tag gerada: ${TAG}"
+          echo "Imagem completa: docker.io/${DOCKERHUB_USERNAME}/devops-app:${TAG}"
 
       - name: Build e Push
         uses: docker/build-push-action@v5
@@ -46,7 +47,7 @@ jobs:
           context: .
           file: ./Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.image_output.outputs.image_full }}
+          tags: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/devops-app:${{ steps.image_output.outputs.image_tag }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -82,9 +83,13 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Pull imagem imutavel
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          IMAGE_TAG: ${{ needs.commit.outputs.image_tag }}
         run: |
-          echo "Puxando imagem: ${{ needs.commit.outputs.image_full }}"
-          docker pull ${{ needs.commit.outputs.image_full }}
+          IMAGE="docker.io/${DOCKERHUB_USERNAME}/devops-app:${IMAGE_TAG}"
+          echo "Puxando imagem: docker.io/***/devops-app:${IMAGE_TAG}"
+          docker pull ${IMAGE}
 
       - name: Executar Migrations Flyway
         run: |
@@ -98,13 +103,18 @@ jobs:
             migrate
 
       - name: Subir aplicacao em Staging
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          IMAGE_TAG: ${{ needs.commit.outputs.image_tag }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
         run: |
+          IMAGE="docker.io/${DOCKERHUB_USERNAME}/devops-app:${IMAGE_TAG}"
           docker run -d \
             --name app-staging \
             --network host \
-            -e DATABASE_URL="jdbc:postgresql://localhost:5432/devops_staging?user=postgres&password=${{ secrets.DB_PASSWORD }}" \
+            -e DATABASE_URL="jdbc:postgresql://localhost:5432/devops_staging?user=postgres&password=${DB_PASSWORD}" \
             -e SPRING_PROFILES_ACTIVE=staging \
-            ${{ needs.commit.outputs.image_full }}
+            ${IMAGE}
 
       - name: Health check Staging
         run: |
@@ -145,14 +155,14 @@ jobs:
             set -e
             docker stop app-prod || true
             docker rm app-prod || true
-            docker pull ${{ needs.commit.outputs.image_full }}
+            docker pull docker.io/${{ secrets.DOCKERHUB_USERNAME }}/devops-app:${{ needs.commit.outputs.image_tag }}
             docker run -d \
               --name app-prod \
               --restart unless-stopped \
               -p 8080:8080 \
               -e DATABASE_URL="${{ secrets.PROD_DATABASE_URL }}" \
               -e SPRING_PROFILES_ACTIVE=production \
-              ${{ needs.commit.outputs.image_full }}
+              docker.io/${{ secrets.DOCKERHUB_USERNAME }}/devops-app:${{ needs.commit.outputs.image_tag }}
 
       - name: Smoke Test
         run: |
@@ -166,4 +176,4 @@ jobs:
             echo "Tentativa $i/20 — HTTP $STATUS"
             sleep 5
           done
-          exit 1
+          exit 1xit 1
