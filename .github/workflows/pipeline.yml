@@ -1,45 +1,171 @@
-name: Desafio Pipeline Uniesp
+name: CI/CD � Build ? Staging ? Production
 
-on: [push]
+on:
+  push:
+    branches: ["main", "develop", "feat-PedroH"]
+  pull_request:
+    branches: ["main"]
 
 env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  REGISTRY: docker.io
+  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/devops-app
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  # ETAPA 1: O GUARDIÃO
-  commit-stage:
+  commit:
+    name: Build, Test e Push
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      # TODO: Configurar o ambiente Go
-      
-      # TODO: Comando para rodar os testes unitários
-      # Dica: O pipeline deve PARAR se o teste falhar.
-      
-      # TODO: Login e Build/Push da imagem Docker
-      # Dica: Use o SHA do commit como tag para garantir imutabilidade.
+    outputs:
+      image_tag: ${{ steps.meta.outputs.version }}
+      image_full: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
 
-  # ETAPA 2: HOMOLOGAÇÃO
-  staging-stage:
-    # ERRO PROPOSITAL: Falta a dependência aqui. 
-    # Sem ela, este job rodará ao mesmo tempo que o de cima.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login no Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Gerar tags imutaveis
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=sha-,format=short
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build e Push
+        id: build-push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  staging:
+    name: Staging � Migrations e Smoke
     runs-on: ubuntu-latest
+    needs: commit
+    if: github.event_name != 'pull_request'
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: devops_staging
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
-      # TODO: Comando para simular a migração do banco de dados
-      - name: Migração de Banco
-        run: echo "O grupo deve implementar o comando de migração aqui"
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      # TODO: Puxar a imagem do registry e "implantar" (echo)
+      - name: Login no Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-  # ETAPA 3: PRODUÇÃO
-  production-stage:
-    # TODO: Definir a dependência correta
+      - name: Pull imagem imutavel
+        run: docker pull ${{ needs.commit.outputs.image_full }}
+
+      - name: Executar Migrations Flyway
+        run: |
+          docker run --rm \
+            --network host \
+            -v ${{ github.workspace }}/src/main/resources/db/migration:/flyway/sql \
+            flyway/flyway:10 \
+            -url="jdbc:postgresql://localhost:5432/devops_staging" \
+            -user=postgres \
+            -password="${{ secrets.DB_PASSWORD }}" \
+            migrate
+
+      - name: Subir aplicacao em Staging
+        run: |
+          docker run -d \
+            --name app-staging \
+            --network host \
+            -e DATABASE_URL="jdbc:postgresql://localhost:5432/devops_staging?user=postgres&password=${{ secrets.DB_PASSWORD }}" \
+            -e SPRING_PROFILES_ACTIVE=staging \
+            ${{ needs.commit.outputs.image_full }}
+
+      - name: Health check Staging
+        run: |
+          for i in $(seq 1 30); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/health || true)
+            if [ "$STATUS" = "200" ]; then
+              echo "Aplicacao respondeu HTTP 200"
+              exit 0
+            fi
+            echo "Tentativa $i/30 � status: $STATUS"
+            sleep 3
+          done
+          docker logs app-staging
+          exit 1
+
+  production:
+    name: Production � Deploy e Smoke Test
     runs-on: ubuntu-latest
-    steps:
-      - name: Deploy
-        run: echo "Implantando a mesma imagem de Staging..."
+    needs: [commit, staging]
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
 
-      # TODO: Implementar o Smoke Test
-      # Dica: Use um comando que verifique o status HTTP de uma rota.
+    steps:
+      - name: Login no Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Deploy em Producao SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          script: |
+            set -e
+            docker stop app-prod || true
+            docker rm app-prod || true
+            docker pull ${{ needs.commit.outputs.image_full }}
+            docker run -d \
+              --name app-prod \
+              --restart unless-stopped \
+              -p 8080:8080 \
+              -e DATABASE_URL="${{ secrets.PROD_DATABASE_URL }}" \
+              -e SPRING_PROFILES_ACTIVE=production \
+              ${{ needs.commit.outputs.image_full }}
+
+      - name: Smoke Test
+        run: |
+          for i in $(seq 1 20); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+              http://${{ secrets.PROD_HOST }}:8080/health || true)
+            if [ "$STATUS" = "200" ]; then
+              echo "Smoke Test passou HTTP 200"
+              exit 0
+            fi
+            echo "Tentativa $i/20 � HTTP $STATUS"
+            sleep 5
+          done
+          exit 1
