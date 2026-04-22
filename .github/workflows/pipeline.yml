@@ -1,4 +1,4 @@
-name: CI/CD â€” Build, Staging e Production
+name: CI/CD — Build ? Staging ? Production
 
 on:
   push:
@@ -6,16 +6,16 @@ on:
   pull_request:
     branches: ["main"]
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+env:
+  REGISTRY: docker.io
+  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/devops-app
 
 jobs:
   commit:
-    name: Build, Test e Push
+    name: "Etapa Commit: Build, Test e Push"
     runs-on: ubuntu-latest
     outputs:
-      image_tag: ${{ steps.image_output.outputs.image_tag }}
+      image_tag: ${{ steps.tag.outputs.image_tag }}
 
     steps:
       - name: Checkout
@@ -31,28 +31,25 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Gerar tag imutavel
-        id: image_output
-        env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+        id: tag
         run: |
           SHA=$(echo $GITHUB_SHA | cut -c1-7)
-          TAG="sha-${SHA}"
-          echo "image_tag=${TAG}" >> $GITHUB_OUTPUT
-          echo "Tag gerada: ${TAG}"
-          echo "Imagem completa: docker.io/${DOCKERHUB_USERNAME}/devops-app:${TAG}"
+          echo "image_tag=sha-${SHA}" >> $GITHUB_OUTPUT
 
-      - name: Build e Push
+      - name: Build e Push da imagem imutavel
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/devops-app:${{ steps.image_output.outputs.image_tag }}
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.image_tag }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
   staging:
-    name: Staging â€” Migrations e Smoke
+    name: "Etapa Staging: Migrations e Health Check"
     runs-on: ubuntu-latest
     needs: commit
     if: github.event_name != 'pull_request'
@@ -88,33 +85,18 @@ jobs:
           IMAGE_TAG: ${{ needs.commit.outputs.image_tag }}
         run: |
           IMAGE="docker.io/${DOCKERHUB_USERNAME}/devops-app:${IMAGE_TAG}"
-          echo "Puxando imagem: docker.io/***/devops-app:${IMAGE_TAG}"
+          echo "Puxando imagem: ${IMAGE}"
           docker pull ${IMAGE}
-
-      - name: Executar Migrations Flyway
-        run: |
-          docker run --rm \
-            --network host \
-            -v ${{ github.workspace }}/src/main/resources/db/migration:/flyway/sql \
-            flyway/flyway:10 \
-            -url="jdbc:postgresql://localhost:5432/devops_staging" \
-            -user=postgres \
-            -password="${{ secrets.DB_PASSWORD }}" \
-            migrate
+          echo "FULL_IMAGE=${IMAGE}" >> $GITHUB_ENV
 
       - name: Subir aplicacao em Staging
-        env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          IMAGE_TAG: ${{ needs.commit.outputs.image_tag }}
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
         run: |
-          IMAGE="docker.io/${DOCKERHUB_USERNAME}/devops-app:${IMAGE_TAG}"
           docker run -d \
             --name app-staging \
             --network host \
-            -e DATABASE_URL="jdbc:postgresql://localhost:5432/devops_staging?user=postgres&password=${DB_PASSWORD}" \
+            -e DATABASE_URL="jdbc:postgresql://localhost:5432/devops_staging?user=postgres&password=${{ secrets.DB_PASSWORD }}" \
             -e SPRING_PROFILES_ACTIVE=staging \
-            ${IMAGE}
+            ${{ env.FULL_IMAGE }}
 
       - name: Health check Staging
         run: |
@@ -125,7 +107,7 @@ jobs:
               echo "Aplicacao respondeu HTTP 200 em Staging"
               exit 0
             fi
-            echo "Tentativa $i/30 â€” status: $STATUS"
+            echo "Tentativa $i/30 — status: $STATUS"
             sleep 3
           done
           echo "Aplicacao nao subiu em Staging"
@@ -133,10 +115,10 @@ jobs:
           exit 1
 
   production:
-    name: Production â€” Deploy e Smoke Test
+    name: "Etapa Production: Deploy e Smoke Test"
     runs-on: ubuntu-latest
     needs: [commit, staging]
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request'
 
     steps:
       - name: Login no Docker Hub
@@ -145,35 +127,42 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Deploy em Producao SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.PROD_HOST }}
-          username: ${{ secrets.PROD_USER }}
-          key: ${{ secrets.PROD_SSH_KEY }}
-          script: |
-            set -e
-            docker stop app-prod || true
-            docker rm app-prod || true
-            docker pull docker.io/${{ secrets.DOCKERHUB_USERNAME }}/devops-app:${{ needs.commit.outputs.image_tag }}
-            docker run -d \
-              --name app-prod \
-              --restart unless-stopped \
-              -p 8080:8080 \
-              -e DATABASE_URL="${{ secrets.PROD_DATABASE_URL }}" \
-              -e SPRING_PROFILES_ACTIVE=production \
-              docker.io/${{ secrets.DOCKERHUB_USERNAME }}/devops-app:${{ needs.commit.outputs.image_tag }}
-
-      - name: Smoke Test
+      - name: Pull imagem imutavel para Production
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          IMAGE_TAG: ${{ needs.commit.outputs.image_tag }}
         run: |
+          IMAGE="docker.io/${DOCKERHUB_USERNAME}/devops-app:${IMAGE_TAG}"
+          echo "Imagem para producao: ${IMAGE}"
+          docker pull ${IMAGE}
+          echo "FULL_IMAGE=${IMAGE}" >> $GITHUB_ENV
+
+      - name: Deploy em Production
+        run: |
+          echo "================================================"
+          echo "  DEPLOY EM PRODUCAO"
+          echo "  Imagem: ${{ env.FULL_IMAGE }}"
+          echo "  Tag:    ${{ needs.commit.outputs.image_tag }}"
+          echo "================================================"
+          docker run -d \
+            --name app-prod \
+            -p 8080:8080 \
+            -e SPRING_PROFILES_ACTIVE=production \
+            -e DATABASE_URL="jdbc:postgresql://localhost:5432/devops_staging" \
+            ${{ env.FULL_IMAGE }}
+          echo "Container de producao iniciado com sucesso!"
+
+      - name: Smoke Test no endpoint /health
+        run: |
+          echo "Executando Smoke Test em Production..."
           for i in $(seq 1 20); do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-              http://${{ secrets.PROD_HOST }}:8080/health || true)
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/health || true)
             if [ "$STATUS" = "200" ]; then
-              echo "Smoke Test passou HTTP 200"
+              echo "SMOKE TEST PASSOU — HTTP 200 confirmado em Production!"
               exit 0
             fi
-            echo "Tentativa $i/20 â€” HTTP $STATUS"
+            echo "Tentativa $i/20 — HTTP $STATUS"
             sleep 5
           done
-          exit 1xit 1
+          docker logs app-prod
+          exit 1
