@@ -76,9 +76,10 @@
         </dependency>
 
         <!-- Suporte explícito ao PostgreSQL no Flyway 10+               -->
-        <dependency>
+       <dependency>
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-database-postgresql</artifactId>
+            <version>9.22.3</version>
         </dependency>
 
         <!-- ============================================================ -->
