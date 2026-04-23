@@ -1,4 +1,4 @@
-name: Desafio Pipeline Uniesp
+name: Pipeline Uniesp
 
 on: [push]
 
@@ -32,7 +32,6 @@ jobs:
           docker build -t $REGISTRY/$IMAGE_NAME:${{ github.sha }} .
           
       # Nota: O Push para o Registry foi omitido para não exigir login real nesta simulação,
-      # mas a imagem já foi construída de forma imutável (Cumpre o critério de avaliação).
 
   # ETAPA 2: HOMOLOGAÇÃO
   staging-stage:
@@ -40,7 +39,7 @@ jobs:
     needs: commit-stage
     runs-on: ubuntu-latest
 
-    # Subimos um banco de dados temporário no pipeline só para rodar as migrations
+    # Sobe um banco de dados temporário no pipeline só para rodar as migrations
     services:
       postgres:
         image: postgres:15
@@ -66,7 +65,7 @@ jobs:
           distribution: 'temurin'
 
       - name: Executar Migrations e Validar Banco
-        # Injetamos as variáveis que o seu application.properties está esperando
+        # Injeta as variáveis do application.properties
         env:
           DATABASE_URL: jdbc:postgresql://localhost:5432/devops
           DB_USER: postgres
@@ -104,7 +103,5 @@ jobs:
       - name: Smoke Test (Validação de Saúde)
         run: |
           echo "Verificando a saúde da aplicação em Produção..."
-          # O curl com a flag -f (fail) quebra o processo se o retorno não for HTTP 200 OK.
-          # Vi no seu VS Code que o actuator está habilitado!
           curl -f http://localhost:8080/actuator/health
           echo "Smoke Test passou! Aplicação online e saudável."
