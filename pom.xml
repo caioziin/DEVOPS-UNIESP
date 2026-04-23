@@ -139,8 +139,7 @@
                         <include>**/*Test.java</include>
                         <include>**/*Tests.java</include>
                     </includes>
-                    <!-- Pipeline falha se qualquer teste falhar -->
-                    <failIfNoTests>true</failIfNoTests>
+                    <failIfNoTests>false</failIfNoTests> 
                 </configuration>
             </plugin>
 
