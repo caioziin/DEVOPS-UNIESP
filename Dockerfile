@@ -1,14 +1,17 @@
-FROM golang:1.21-alpine
-
+FROM maven:3.9.6-eclipse-temurin-21 AS build
 WORKDIR /app
 
-COPY go.mod ./
+COPY pom.xml .
+COPY src ./src
+
+RUN mvn clean package -DskipTests
 
 
-COPY . .
+FROM eclipse-temurin:21-jre-alpine
+WORKDIR /app
 
-RUN go build -o main .
+COPY --from=build /app/target/*.jar app.jar
 
 EXPOSE 8080
 
-CMD ["./main"]
+ENTRYPOINT ["java", "-jar", "app.jar"]
