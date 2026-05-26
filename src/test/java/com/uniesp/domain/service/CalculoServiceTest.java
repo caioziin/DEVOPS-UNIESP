@@ -22,7 +22,7 @@ class CalculoServiceTest {
     @DisplayName("soma: bug corrigido — não deve somar +1 extra (era a+b+1 no Go)")
     void soma_bugCorrigido_naoAdicionaUmExtra() {
         assertNotEquals(6, CalculoService.soma(2, 3)); // bug antigo retornava 6
-        assertEquals(5,  CalculoService.soma(2, 3));
+        assertEquals(5,  CalculoService.soma(2, 3)); // correto retorna 5
     }
 
     @Test
