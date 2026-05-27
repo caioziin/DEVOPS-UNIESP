@@ -18,7 +18,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@SpringBootTest
+@SpringBootTest(classes = com.uniesp.UniespApplication.class)
 @ActiveProfiles("test")
 @Transactional
 @DisplayName("UserRepositoryAdapter - Testes de Integração com H2")
